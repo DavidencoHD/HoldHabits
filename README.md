@@ -1,112 +1,97 @@
-# Mis Pastillas — App Android
+<img src="logo.png" alt="HoldHabits" width="80" style="border-radius:16px"/>
 
-Tracker de pastillas nativo para Android con recordatorios diarios.
+# HoldHabits
 
-## Características
-- ✅ Registra tomas con un solo toque
-- 🔔 Notificaciones diarias a la hora que elijas
-- 📅 Calendario visual (verde = tomada, rojo = olvidada)
-- 🔥 Racha de días consecutivos
-- 📊 Estadísticas mensuales
-- 💊 Múltiples pastillas/hábitos
-- 🌙 Modo oscuro automático
+**HoldHabits** es una app Android nativa para registrar y dar seguimiento a tus hábitos diarios. Con recordatorios personalizados, calendario visual y estadísticas detalladas, te ayuda a mantener el rumbo día a día.
 
----
+<img src="screenshots/home.png" width="200" alt="Home screen" /> <img src="screenshots/calendar.png" width="200" alt="Calendar" /> <img src="screenshots/stats.png" width="200" alt="Stats" />
 
-## Cómo instalar en tu Android (Windows)
+## ✨ Características
 
-### Paso 1 — Instala Node.js
-1. Ve a https://nodejs.org y descarga la versión **LTS**
-2. Instálala con las opciones por defecto
-3. Abre el **Símbolo del sistema** (cmd) y comprueba: `node --version`
+- ✅ **Registro con un toque** – Marca hábitos completados al instante con feedback háptico
+- 🔔 **Recordatorios inteligentes** – Notificaciones diarias, cada X días, semanas o meses, con selección de días específicos (L/M/X/J/V/S/D)
+- 📅 **Calendario mensual** – Vista clara con colores: verde (completado), ámbar (parcial), rojo (pendiente). Heatmap anual incluido
+- 🔥 **Rachas** – Racha actual y mejor racha histórica por hábito y global
+- 📊 **Estadísticas** – Barras semanales, cumplimiento a 7 y 30 días por hábito, minicalendario mensual con navegación
+- 📂 **Categorías** – Agrupa hábitos por tipo (Salud, Ejercicio, Estudio, Trabajo, Hogar, Ocio, Social)
+- 🎨 **Iconos y colores personalizados** – Emojis, colores por hábito y emoji personalizado
+- 📦 **Archivar** – Oculta hábitos sin perder datos. Restáuralos cuando quieras
+- 🔄 **Reordenar** – Arrastra para cambiar el orden de tus hábitos
+- 📤 **Backup / Restore** – Exporta e importa tus datos como JSON
+- 🌙 **Modo oscuro automático** – Sigue la configuración del sistema
+- 📱 **Enfoque** – Modo focus para ver solo hábitos pendientes del día
 
-### Paso 2 — Instala Expo CLI y EAS CLI
-Abre cmd y ejecuta:
-```
-npm install -g expo-cli eas-cli
-```
+## 🛠️ Tecnologías
 
-### Paso 3 — Crea una cuenta gratuita en Expo
-1. Ve a https://expo.dev y regístrate (es gratis)
-2. En cmd, inicia sesión: `eas login`
+- **React Native** (Expo SDK 54)
+- **TypeScript**
+- **React Navigation** (native-stack + bottom-tabs)
+- **react-native-draggable-flatlist** (reordenar hábitos)
+- **expo-notifications** (recordatorios)
+- **react-native-reanimated** (animaciones)
+- **AsyncStorage** (persistencia local)
+- **date-fns** (manejo de fechas)
+- **Jest + Testing Library** (tests unitarios)
 
-### Paso 4 — Prepara el proyecto
-1. Descomprime la carpeta `PillTracker` donde quieras (ej: `C:\PillTracker`)
-2. En cmd, navega hasta ella:
-```
-cd C:\PillTracker
-```
-3. Instala las dependencias:
-```
+## 🚀 Cómo empezar
+
+```bash
+# Clonar
+git clone https://github.com/DavidencoHD/HoldHabits.git
+cd HoldHabits
+
+# Instalar dependencias
 npm install
+
+# Iniciar servidor de desarrollo
+npx expo start
 ```
 
-### Paso 5 — Configura el proyecto en Expo
+Escanea el QR con **Expo Go** (Android) o presiona `a` para abrir el emulador.
+
+### Tests
+
+```bash
+npm test
 ```
-eas init
+
+## 📁 Estructura
+
 ```
-Esto pedirá que elijas un nombre para el proyecto. Pon **MisPastillas**.  
-Después actualizará el `app.json` automáticamente.
-
-### Paso 6 — Compila el APK en la nube
-```
-eas build --platform android --profile preview
-```
-- La primera vez tardará unos **5-10 minutos** (Expo lo compila en sus servidores, no en tu PC)
-- Cuando termine, te dará un **enlace de descarga** del APK
-
-### Paso 7 — Instala el APK en tu móvil
-1. Descarga el APK desde el enlace que te dio Expo
-2. Pásalo a tu móvil (por cable, WhatsApp, email, etc.)
-3. En tu Android: **Ajustes → Seguridad → Instalar apps desconocidas** → actívalo para el archivo manager o el navegador
-4. Abre el APK y pulsa **Instalar**
-
-¡Listo! La app aparecerá en tu menú como **"Mis Pastillas"** 💊
-
----
-
-## Desarrollo local (opcional)
-Si quieres ver los cambios en tiempo real sin compilar:
-
-1. Instala la app **Expo Go** en tu móvil (Play Store)
-2. Conecta el móvil y el PC a la **misma WiFi**
-3. En la carpeta del proyecto: `npx expo start`
-4. Escanea el QR con Expo Go
-
----
-
-## Estructura del proyecto
-```
-PillTracker/
-├── App.js                    # Navegación principal
-├── app.json                  # Configuración de la app
-├── eas.json                  # Configuración de compilación
+HoldHabits/
+├── App.tsx                  # Entrada principal, navegación y onboarding
 ├── src/
-│   ├── screens/
-│   │   ├── HomeScreen.js     # Pantalla principal (hoy)
-│   │   ├── CalendarScreen.js # Calendario e historial
-│   │   ├── HabitsScreen.js   # Gestión de pastillas
-│   │   └── LogScreen.js      # Registro manual
-│   └── utils/
-│       ├── AppContext.js      # Estado global
-│       ├── storage.js         # Persistencia de datos
-│       ├── notifications.js   # Notificaciones push
-│       └── theme.js           # Colores y estilos
-└── assets/                   # Iconos (añadir manualmente)
+│   ├── screens/             # Pantallas
+│   │   ├── HomeScreen       # Vista del día con tarjetas y progreso
+│   │   ├── CalendarScreen   # Calendario mensual y heatmap anual
+│   │   ├── HabitsScreen     # CRUD de hábitos con drag reorder
+│   │   ├── StatsScreen      # Estadísticas y backup
+│   │   ├── LogScreen        # Registro manual para fechas pasadas
+│   │   └── OnboardingScreen # Tutorial inicial (3 pantallas)
+│   ├── components/          # Componentes reutilizables
+│   │   └── ErrorBoundary    # Captura de errores con UI de reintento
+│   ├── utils/               # Lógica compartida
+│   │   ├── AppContext        # Estado global (hábitos, entradas, notificaciones)
+│   │   ├── storage           # AsyncStorage, streaks, export/import
+│   │   ├── notifications     # Programación y categorías de notificaciones
+│   │   └── theme             # Colores claro/oscuro
+│   ├── __tests__/           # Tests unitarios
+│   └── types.ts             # Interfaces TypeScript
+├── assets/                  # Iconos y splash
+├── app.json                 # Configuración Expo
+├── tsconfig.json            # Configuración TypeScript
+└── jest.config.js           # Configuración de tests
 ```
 
----
+## 📱 Pantallas
 
-## Solución de problemas
+| Pantalla | Descripción |
+|----------|-------------|
+| **Hoy** | Tarjeta de progreso circular, hábitos agrupados por categoría, modo enfoque, racha actual |
+| **Estadísticas** | Barras de la última semana, cumplimiento por hábito (30d + 7d), minicalendario mensual navegable, export CSV y backup |
+| **Historial** | Calendario mensual con colores por estado, heatmap anual plegable, detalle al tocar un día |
+| **Hábitos** | CRUD completo, arrastrar para reordenar, selector de frecuencia, días de la semana, emoji personalizado, archivar/restaurar |
 
-**"eas no se reconoce como comando"**  
-→ Cierra y vuelve a abrir cmd después de instalar Node.js
+## 📄 Licencia
 
-**El APK no se instala**  
-→ Asegúrate de tener activado "Instalar apps de fuentes desconocidas" en los ajustes de Android
-
-**Las notificaciones no llegan**  
-→ Abre la app → pulsa "Activar recordatorios" → ve a Ajustes del móvil → Apps → Mis Pastillas → Notificaciones → actívalas todas
-
-**Error "project not found" en eas build**  
-→ Ejecuta primero `eas login` y luego `eas init`
+Este proyecto es de uso personal.
