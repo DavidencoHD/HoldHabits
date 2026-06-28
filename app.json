@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Trackify",
-    "slug": "pilltracker",
+    "name": "HoldHabits",
+    "slug": "holdhabits",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1E40AF"
       },
-      "package": "com.trackify.app",
+      "package": "com.holdhabits.app",
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",

@@ -169,7 +169,7 @@ export default function HomeScreen({ navigation }) {
     if (!granted) {
       Alert.alert(
         'Permisos necesarios',
-        'Ve a Ajustes > Aplicaciones > Trackify > Notificaciones y actívalas.',
+        'Ve a Ajustes > Aplicaciones > HoldHabits > Notificaciones y actívalas.',
         [{ text: 'Entendido' }]
       );
     }

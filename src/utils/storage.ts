@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Habit, Entry } from '../types';
 
-const STORAGE_KEY = 'pilltracker_v1';
-const ONBOARDING_KEY = 'trackify_onboarding_done';
+const STORAGE_KEY = 'holdhabits_v1';
+const OLD_STORAGE_KEY = 'pilltracker_v1';
+const ONBOARDING_KEY = 'holdhabits_onboarding_done';
+const OLD_ONBOARDING_KEY = 'trackify_onboarding_done';
 const SCHEMA_VERSION = 2;
 
 function migrateHabits(habits: Habit[]): Habit[] {
@@ -25,7 +27,14 @@ function migrateHabits(habits: Habit[]): Habit[] {
 
 export async function loadData(): Promise<{ habits: Habit[]; entries: Entry[]; schemaVersion: number }> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    let raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      raw = await AsyncStorage.getItem(OLD_STORAGE_KEY);
+      if (raw) {
+        await AsyncStorage.setItem(STORAGE_KEY, raw);
+        await AsyncStorage.removeItem(OLD_STORAGE_KEY);
+      }
+    }
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
@@ -50,7 +59,14 @@ export async function saveData(habits: Habit[], entries: Entry[]): Promise<void>
 
 export async function isOnboardingDone(): Promise<boolean> {
   try {
-    const val = await AsyncStorage.getItem(ONBOARDING_KEY);
+    let val = await AsyncStorage.getItem(ONBOARDING_KEY);
+    if (val === null) {
+      val = await AsyncStorage.getItem(OLD_ONBOARDING_KEY);
+      if (val !== null) {
+        await AsyncStorage.setItem(ONBOARDING_KEY, val);
+        await AsyncStorage.removeItem(OLD_ONBOARDING_KEY);
+      }
+    }
     return val === 'true';
   } catch (e) {
     return false;

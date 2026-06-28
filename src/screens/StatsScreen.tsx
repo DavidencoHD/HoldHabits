@@ -87,7 +87,7 @@ function exportCSV(habits, entries) {
     return `"${e.date}","${h?.name || e.habitId}","${e.time}","${(e.note || '').replace(/"/g, '""')}"`;
   });
   const csv = [header, ...rows].join('\n');
-  Share.share({ message: csv, title: 'Trackify - Exportar datos' });
+  Share.share({ message: csv, title: 'HoldHabits - Exportar datos' });
 }
 
 export default function StatsScreen() {
@@ -283,7 +283,7 @@ export default function StatsScreen() {
             style={s.backupBtn}
             onPress={async () => {
               const data = await handleExport();
-              Share.share({ message: data, title: 'Trackify - Backup' });
+              Share.share({ message: data, title: 'HoldHabits - Backup' });
             }}
           >
             <Ionicons name="download-outline" size={16} color={c.primary} />
