@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Alert, Switch, useColorScheme, Modal, TextInput, ScrollView,
+  Alert, Switch, Modal, TextInput, ScrollView,
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -256,10 +256,9 @@ function ArchivedList({ habits, c, s, showArchived, setShowArchived, restoreHabi
 }
 
 export default function HabitsScreen() {
-  const scheme = useColorScheme();
-  const c = scheme === 'dark' ? darkColors : colors;
   const insets = useSafeAreaInsets();
-  const { habits, addHabit, updateHabit, deleteHabit, reorderHabits, archiveHabit, restoreHabit } = useApp();
+  const { habits, addHabit, updateHabit, deleteHabit, reorderHabits, archiveHabit, restoreHabit, resolvedScheme } = useApp();
+  const c = resolvedScheme === 'dark' ? darkColors : colors;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingHabit, setEditingHabit] = useState(null);

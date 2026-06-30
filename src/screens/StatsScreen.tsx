@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  useColorScheme, Share, Modal, Alert, TextInput, Platform, FlatList,
+  Share, Modal, Alert, TextInput, Platform, FlatList,
   Animated, PanResponder, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -91,10 +91,9 @@ function exportCSV(habits, entries) {
 }
 
 export default function StatsScreen() {
-  const scheme = useColorScheme();
-  const c = scheme === 'dark' ? darkColors : colors;
   const insets = useSafeAreaInsets();
-  const { habits: allHabits, entries, handleExport, handleImport } = useApp();
+  const { habits: allHabits, entries, handleExport, handleImport, resolvedScheme } = useApp();
+  const c = resolvedScheme === 'dark' ? darkColors : colors;
   const habits = allHabits.filter(h => !h.archived);
   const today = new Date();
 

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, useColorScheme,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, TextInput, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,10 +23,9 @@ function getDayEntries(entries, habits, ds) {
 }
 
 export default function CalendarScreen() {
-  const scheme = useColorScheme();
-  const c = scheme === 'dark' ? darkColors : colors;
   const insets = useSafeAreaInsets();
-  const { habits: allHabits, entries, addEntry, unmarkTaken } = useApp();
+  const { habits: allHabits, entries, addEntry, unmarkTaken, resolvedScheme } = useApp();
+  const c = resolvedScheme === 'dark' ? darkColors : colors;
   const habits = allHabits.filter(h => !h.archived);
 
   const today = useMemo(() => new Date(), []);

@@ -1,14 +1,14 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, useColorScheme, RefreshControl, Modal, Animated, Platform,
+  Alert, RefreshControl, Modal, Animated, Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../utils/AppContext';
 import { colors, darkColors, spacing, radius, fontSize } from '../utils/theme';
-import { todayStr, calcStreak, getMonthStats } from '../utils/storage';
+import { todayStr, dateStr, calcStreak, getMonthStats } from '../utils/storage';
 
 const CATEGORIES = [
   { key: '', label: 'Sin categoría', icon: 'ellipse-outline' },
@@ -34,6 +34,20 @@ function formatDate(date) {
   const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
     'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   return `${days[date.getDay()]}, ${date.getDate()} de ${months[date.getMonth()]}`;
+}
+
+function shortDayLabel(ds, todayStr) {
+  if (ds === todayStr) return 'Hoy';
+  const d = new Date(ds + 'T12:00:00');
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yStr = dateStr(yesterday);
+  if (ds === yStr) return 'Ayer';
+  const dias = ['D','L','M','X','J','V','S'];
+  return dias[d.getDay()];
+}
+
+function dayNumber(ds) {
+  return new Date(ds + 'T12:00:00').getDate();
 }
 
 function AnimatedCheckmark({ size = 26, color }) {
@@ -101,31 +115,31 @@ function HabitCard({ habit, taken, entry, onToggle, c, s }) {
 }
 
 export default function HomeScreen({ navigation }) {
-  const scheme = useColorScheme();
-  const c = scheme === 'dark' ? darkColors : colors;
   const insets = useSafeAreaInsets();
+  const dayStripRef = useRef(null);
 
   const {
-    habits, entries, notifGranted,
+    habits, entries, notifGranted, resolvedScheme,
     markTaken, unmarkTaken, isHabitTaken, getEntryForHabit,
-    enableNotifications,
+    enableNotifications, themeMode, setThemeMode,
   } = useApp();
+  const c = resolvedScheme === 'dark' ? darkColors : colors;
 
   const [refreshing, setRefreshing] = useState(false);
   const [confirmUnmark, setConfirmUnmark] = useState(null);
   const [focusMode, setFocusMode] = useState(false);
   const today = todayStr();
+  const [selectedDate, setSelectedDate] = useState(today);
 
   const visibleHabits = habits.filter(h => !h.archived);
 
   const streak = calcStreak(visibleHabits, entries);
-  const mn = getMonthStats(visibleHabits, entries, new Date().getFullYear(), new Date().getMonth());
   const totalHabits = visibleHabits.length;
-  const doneToday = visibleHabits.filter(h => isHabitTaken(h.id, today)).length;
-  const pct = totalHabits > 0 ? Math.round(doneToday / totalHabits * 100) : 0;
+  const doneCount = visibleHabits.filter(h => isHabitTaken(h.id, selectedDate)).length;
+  const pct = totalHabits > 0 ? Math.round(doneCount / totalHabits * 100) : 0;
 
   const filteredHabits = focusMode
-    ? visibleHabits.filter(h => !isHabitTaken(h.id, today))
+    ? visibleHabits.filter(h => !isHabitTaken(h.id, selectedDate))
     : visibleHabits;
 
   const grouped = {};
@@ -140,27 +154,44 @@ export default function HomeScreen({ navigation }) {
     return a.localeCompare(b);
   });
 
+  const days = useMemo(() => {
+    return Array.from({ length: 30 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (29 - i));
+      return dateStr(d);
+    });
+  }, []);
+
+  const goToday = useCallback(() => {
+    setSelectedDate(today);
+    setFocusMode(false);
+  }, [today]);
+
+  useEffect(() => {
+    dayStripRef.current?.scrollToEnd({ animated: false });
+  }, []);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 500);
   }, []);
 
   const handleToggle = useCallback(async (habitId) => {
-    const taken = isHabitTaken(habitId, today);
+    const taken = isHabitTaken(habitId, selectedDate);
     if (taken) {
       setConfirmUnmark(habitId);
     } else {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await markTaken(habitId, today);
+      await markTaken(habitId, selectedDate);
     }
-  }, [isHabitTaken, markTaken, today]);
+  }, [isHabitTaken, markTaken, selectedDate]);
 
   const handleConfirmUnmark = useCallback(() => {
     if (confirmUnmark) {
-      unmarkTaken(confirmUnmark, today);
+      unmarkTaken(confirmUnmark, selectedDate);
       setConfirmUnmark(null);
     }
-  }, [confirmUnmark, unmarkTaken, today]);
+  }, [confirmUnmark, unmarkTaken, selectedDate]);
 
   const confirmHabit = confirmUnmark ? habits.find(h => h.id === confirmUnmark) : null;
 
@@ -176,6 +207,7 @@ export default function HomeScreen({ navigation }) {
   }, [enableNotifications]);
 
   const allDone = visibleHabits.length > 0 && visibleHabits.every(h => isHabitTaken(h.id, today));
+  const isToday = selectedDate === today;
 
   const s = makeStyles(c);
 
@@ -187,10 +219,32 @@ export default function HomeScreen({ navigation }) {
       >
         <View style={s.header}>
           <View>
-            <Text style={s.headerTitle}>Tus hábitos</Text>
-            <Text style={s.headerDate}>{formatDate(new Date())}</Text>
+            <Text style={s.headerTitle}>
+              {isToday ? 'Tus hábitos' : shortDayLabel(selectedDate, today)}
+            </Text>
+            <Text style={s.headerDate}>
+              {isToday ? formatDate(new Date()) : formatDate(new Date(selectedDate + 'T12:00:00'))}
+            </Text>
           </View>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            {!isToday && (
+              <TouchableOpacity style={s.headerBtn} onPress={goToday}>
+                <Ionicons name="today-outline" size={20} color={c.primary} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={s.headerBtn}
+              onPress={() => {
+                const modes = ['system', 'light', 'dark'];
+                const idx = modes.indexOf(themeMode);
+                setThemeMode(modes[(idx + 1) % 3] as 'system' | 'light' | 'dark');
+              }}
+            >
+              <Ionicons
+                name={themeMode === 'light' ? 'sunny' : themeMode === 'dark' ? 'moon' : 'contrast'}
+                size={20} color={c.textSecondary}
+              />
+            </TouchableOpacity>
             <TouchableOpacity
               style={[s.headerBtn, focusMode && { backgroundColor: c.primary + '20', borderColor: c.primary }]}
               onPress={() => setFocusMode(v => !v)}
@@ -202,6 +256,31 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Day strip */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          ref={dayStripRef}
+          style={{ marginBottom: spacing.md }}
+          contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}
+        >
+          {days.map(ds => {
+            const allDone_ = visibleHabits.length > 0 && visibleHabits.every(h => isHabitTaken(h.id, ds));
+            const someDone_ = visibleHabits.some(h => isHabitTaken(h.id, ds));
+            const dotColor = allDone_ ? c.success : someDone_ ? c.warning : visibleHabits.length > 0 ? c.dangerLight : c.surface2;
+            const isSel = ds === selectedDate;
+            return (
+              <TouchableOpacity
+                key={ds}
+                onPress={() => setSelectedDate(ds)}
+                style={[s.dayChip, { backgroundColor: c.surface, borderColor: isSel ? c.primary : c.border, borderWidth: isSel ? 2 : 1 }]}
+              >
+                <Text style={{ fontSize: 10, fontWeight: '600', color: c.textMuted }}>{shortDayLabel(ds, today)}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: c.textPrimary }}>{dayNumber(ds)}</Text>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dotColor }} />
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         {!notifGranted && (
           <TouchableOpacity style={s.notifBanner} onPress={handleEnableNotif}>
@@ -225,12 +304,12 @@ export default function HomeScreen({ navigation }) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.progressTitle}>
-                {doneToday === totalHabits ? '¡Completado!' : 'Progreso de hoy'}
+                {doneCount === totalHabits ? '¡Completado!' : 'Progreso'}
               </Text>
               <Text style={s.progressSub}>
-                {doneToday} de {totalHabits} hábito{totalHabits > 1 ? 's' : ''} hecho{doneToday !== 1 ? 's' : ''}
+                {doneCount} de {totalHabits} hábito{totalHabits > 1 ? 's' : ''} hecho{doneCount !== 1 ? 's' : ''}
               </Text>
-              {streak > 0 && (
+              {streak > 0 && isToday && (
                 <View style={s.streakMini}>
                   <Text>🔥</Text>
                   <Text style={s.streakMiniText}>{streak} días seguidos</Text>
@@ -259,8 +338,8 @@ export default function HomeScreen({ navigation }) {
                   <HabitCard
                     key={h.id}
                     habit={h}
-                    taken={isHabitTaken(h.id, today)}
-                    entry={getEntryForHabit(h.id, today)}
+                    taken={isHabitTaken(h.id, selectedDate)}
+                    entry={getEntryForHabit(h.id, selectedDate)}
                     onToggle={() => handleToggle(h.id)}
                     c={c}
                     s={s}
@@ -271,10 +350,10 @@ export default function HomeScreen({ navigation }) {
           ))
         )}
 
-        {focusMode && doneToday > 0 && doneToday < totalHabits && (
+        {focusMode && doneCount > 0 && doneCount < totalHabits && (
           <TouchableOpacity style={s.focusHint} onPress={() => setFocusMode(false)}>
             <Ionicons name="eye-outline" size={16} color={c.primary} />
-            <Text style={s.focusHintText}>Mostrar completados ({doneToday})</Text>
+            <Text style={s.focusHintText}>Mostrar completados ({doneCount})</Text>
           </TouchableOpacity>
         )}
 
@@ -326,7 +405,7 @@ export default function HomeScreen({ navigation }) {
               </View>
             )}
             <Text style={{ fontSize: fontSize.sm, color: c.textMuted, textAlign: 'center' }}>
-              Se eliminará el registro de hoy de este hábito.
+              Se eliminará el registro de {isToday ? 'hoy' : shortDayLabel(selectedDate, today)} de este hábito.
             </Text>
             <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
               <TouchableOpacity
@@ -393,6 +472,10 @@ const makeStyles = (c) => StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.xs, fontWeight: '700', color: c.textMuted,
     letterSpacing: 0.8, paddingHorizontal: spacing.lg, marginBottom: spacing.sm,
+  },
+  dayChip: {
+    width: 48, alignItems: 'center', gap: 2,
+    paddingVertical: spacing.sm, borderRadius: radius.md,
   },
   habitsList: { marginHorizontal: spacing.lg },
   habitCard: {

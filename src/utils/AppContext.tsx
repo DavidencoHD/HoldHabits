@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import * as Notifications from 'expo-notifications';
-import { loadData, saveData, todayStr, currentTimeStr, exportAllData, importAllData } from '../utils/storage';
+import { useColorScheme } from 'react-native';
+import { loadData, saveData, todayStr, currentTimeStr, exportAllData, importAllData, loadThemePreference, saveThemePreference } from '../utils/storage';
 import { scheduleHabitNotification, cancelHabitNotification, requestPermissions, setupNotificationCategories, ACTION_MARK_DONE } from '../utils/notifications';
 import { Habit, Entry, HabitFormData } from '../types';
 
@@ -9,6 +10,9 @@ export interface AppContextValue {
   entries: Entry[];
   loading: boolean;
   notifGranted: boolean;
+  themeMode: string;
+  setThemeMode: (mode: 'system' | 'light' | 'dark') => void;
+  resolvedScheme: 'light' | 'dark';
   enableNotifications: () => Promise<boolean>;
   markTaken: (habitId: string, date?: string, time?: string, note?: string) => Promise<Entry>;
   unmarkTaken: (habitId: string, date: string) => Promise<void>;
@@ -32,8 +36,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [notifGranted, setNotifGranted] = useState(false);
+  const [themeMode, setThemeModeState] = useState<string>('system');
+  const systemScheme = useColorScheme();
+  const resolvedScheme = themeMode === 'system' ? (systemScheme || 'dark') : themeMode as 'light' | 'dark';
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
+
+  const setThemeMode = useCallback((mode: 'system' | 'light' | 'dark') => {
+    setThemeModeState(mode);
+    saveThemePreference(mode);
+  }, []);
 
   const persist = useCallback(async (newHabits, newEntries) => {
     await saveData(newHabits, newEntries);
@@ -44,6 +56,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const data = await loadData();
       setHabits(data.habits);
       setEntries(data.entries);
+      const theme = await loadThemePreference();
+      setThemeModeState(theme);
       setLoading(false);
     })();
   }, []);
@@ -274,6 +288,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       entries,
       loading,
       notifGranted,
+      themeMode,
+      setThemeMode,
+      resolvedScheme,
       enableNotifications: useCallback(async () => {
         const granted = await requestPermissions();
         setNotifGranted(granted);

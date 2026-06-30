@@ -5,6 +5,7 @@ const STORAGE_KEY = 'holdhabits_v1';
 const OLD_STORAGE_KEY = 'pilltracker_v1';
 const ONBOARDING_KEY = 'holdhabits_onboarding_done';
 const OLD_ONBOARDING_KEY = 'trackify_onboarding_done';
+const THEME_KEY = 'holdhabits_theme';
 const SCHEMA_VERSION = 2;
 
 function migrateHabits(habits: Habit[]): Habit[] {
@@ -71,6 +72,20 @@ export async function isOnboardingDone(): Promise<boolean> {
   } catch (e) {
     return false;
   }
+}
+
+export async function loadThemePreference(): Promise<string> {
+  try {
+    const val = await AsyncStorage.getItem(THEME_KEY);
+    if (val === 'light' || val === 'dark') return val;
+  } catch (e) {}
+  return 'system';
+}
+
+export async function saveThemePreference(mode: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(THEME_KEY, mode);
+  } catch (e) {}
 }
 
 export async function setOnboardingDone(): Promise<void> {

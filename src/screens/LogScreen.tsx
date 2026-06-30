@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, useColorScheme,
+  View, Text, StyleSheet, TouchableOpacity,
+  TextInput, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,10 +23,9 @@ function dateLabel(ds) {
 }
 
 export default function LogScreen({ navigation }) {
-  const scheme = useColorScheme();
-  const c = scheme === 'dark' ? darkColors : colors;
   const insets = useSafeAreaInsets();
-  const { habits: allHabits, entries, addEntry, unmarkTaken, isHabitTaken } = useApp();
+  const { habits: allHabits, entries, addEntry, unmarkTaken, isHabitTaken, resolvedScheme } = useApp();
+  const c = resolvedScheme === 'dark' ? darkColors : colors;
   const habits = allHabits.filter(h => !h.archived);
 
   const today = todayStr();
