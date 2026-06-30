@@ -20,7 +20,7 @@ function migrateHabits(habits: Habit[]): Habit[] {
     reminderEnabled: h.reminderEnabled !== false,
     reminderFrequency: h.reminderFrequency || 'daily',
     reminderInterval: h.reminderInterval || 1,
-    reminderTime: h.reminderTime || { hour: 9, minute: 0 },
+    reminderTimes: (h as any).reminderTimes || ((h as any).reminderTime ? [(h as any).reminderTime] : [{ hour: 9, minute: 0 }]),
     notificationId: h.notificationId || null,
     notificationIds: h.notificationIds || [],
   }));

@@ -105,7 +105,7 @@ function HabitCard({ habit, taken, entry, onToggle, c, s }) {
             </View>
           ) : (
             <Text style={s.reminderTime}>
-              <Ionicons name="time-outline" size={12} color={c.textMuted} /> {String(habit.reminderTime.hour).padStart(2,'0')}:{String(habit.reminderTime.minute).padStart(2,'0')}
+              <Ionicons name="time-outline" size={12} color={c.textMuted} /> {(habit.reminderTimes || []).map(t => `${String(t.hour).padStart(2,'0')}:${String(t.minute).padStart(2,'0')}`).join(', ')}
             </Text>
           )}
         </View>

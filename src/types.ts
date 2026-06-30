@@ -12,7 +12,7 @@ export interface Habit {
   category: string;
   archived: boolean;
   reminderDays: number[];
-  reminderTime: ReminderTime;
+  reminderTimes: ReminderTime[];
   reminderEnabled: boolean;
   reminderFrequency: string;
   reminderInterval: number;
@@ -36,7 +36,7 @@ export interface HabitFormData {
   color: string;
   category: string;
   reminderEnabled: boolean;
-  reminderTime: ReminderTime;
+  reminderTimes: ReminderTime[];
   reminderFrequency: string;
   reminderInterval: number;
   reminderDays: number[];

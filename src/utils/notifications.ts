@@ -79,97 +79,100 @@ export async function scheduleHabitNotification(habit: Habit): Promise<{ primary
 
   if (!habit.reminderEnabled) return { primary: null, others: [] };
 
-  const { hour, minute } = habit.reminderTime;
+  const times = habit.reminderTimes?.length ? habit.reminderTimes : [{ hour: 9, minute: 0 }];
   const frequency = habit.reminderFrequency || 'daily';
   const intervalValue = habit.reminderInterval || 1;
+  const allIds: string[] = [];
 
-  const notifContent = {
-    title: `⏰ ${habit.name}`,
-    body: habit.dose || 'No olvides tu hábito de hoy',
-    sound: 'default' as const,
-    data: { habitId: habit.id },
-    categoryIdentifier: 'habit-reminder',
-    channelId: 'habit-reminders',
-  };
+  for (const rt of times) {
+    const { hour, minute } = rt;
 
-  try {
-    if (frequency === 'daily') {
-      const specificDays: number[] = habit.reminderDays || [];
-      if (specificDays.length > 0) {
-        const now = new Date();
-        const allIds: string[] = [];
-        for (let i = 0; i < 60; i++) {
+    const notifContent = {
+      title: `⏰ ${habit.name}`,
+      body: habit.dose ? `${habit.dose} — ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}` : `Recordatorio de las ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+      sound: 'default' as const,
+      data: { habitId: habit.id },
+      categoryIdentifier: 'habit-reminder',
+      channelId: 'habit-reminders',
+    };
+
+    try {
+      if (frequency === 'daily') {
+        const specificDays: number[] = habit.reminderDays || [];
+        if (specificDays.length > 0) {
+          const now = new Date();
+          for (let i = 0; i < 60; i++) {
+            const triggerDate = new Date(now);
+            triggerDate.setDate(triggerDate.getDate() + i);
+            const dow = triggerDate.getDay();
+            const normalizedDow = dow === 0 ? 6 : dow - 1;
+            if (!specificDays.includes(normalizedDow)) continue;
+            triggerDate.setHours(hour, minute, 0, 0);
+            if (triggerDate <= now) continue;
+            const id = await Notifications.scheduleNotificationAsync({
+              content: notifContent,
+              trigger: { type: 'date' as any, date: triggerDate },
+            });
+            allIds.push(id);
+          }
+          continue;
+        }
+        const id = await Notifications.scheduleNotificationAsync({
+          content: notifContent,
+          trigger: { type: 'daily' as any, hour, minute },
+        });
+        allIds.push(id);
+        continue;
+      }
+
+      const now = new Date();
+
+      const scheduleDate = (triggerDate: Date): Promise<string> =>
+        Notifications.scheduleNotificationAsync({
+          content: notifContent,
+          trigger: { type: 'date' as any, date: triggerDate },
+        });
+
+      if (frequency === 'interval-days') {
+        const totalDays = intervalValue;
+        const notifCount = Math.min(totalDays, 60);
+        for (let i = 0; i < notifCount; i++) {
           const triggerDate = new Date(now);
-          triggerDate.setDate(triggerDate.getDate() + i);
-          const dow = triggerDate.getDay();
-          const normalizedDow = dow === 0 ? 6 : dow - 1;
-          if (!specificDays.includes(normalizedDow)) continue;
+          triggerDate.setDate(triggerDate.getDate() + (i * totalDays));
           triggerDate.setHours(hour, minute, 0, 0);
           if (triggerDate <= now) continue;
-          const id = await Notifications.scheduleNotificationAsync({
-            content: notifContent,
-            trigger: { type: 'date' as any, date: triggerDate },
-          });
+          const id = await scheduleDate(triggerDate);
           allIds.push(id);
         }
-        return { primary: allIds[0] || null, others: allIds.slice(1) };
+      } else if (frequency === 'interval-weeks') {
+        const totalWeeks = intervalValue;
+        const notifCount = Math.min(totalWeeks, 26);
+        for (let i = 0; i < notifCount; i++) {
+          const triggerDate = new Date(now);
+          triggerDate.setDate(triggerDate.getDate() + (i * totalWeeks * 7));
+          triggerDate.setHours(hour, minute, 0, 0);
+          if (triggerDate <= now) continue;
+          const id = await scheduleDate(triggerDate);
+          allIds.push(id);
+        }
+      } else if (frequency === 'interval-months') {
+        const totalMonths = intervalValue;
+        const notifCount = Math.min(totalMonths, 12);
+        for (let i = 0; i < notifCount; i++) {
+          const triggerDate = new Date(now);
+          triggerDate.setMonth(triggerDate.getMonth() + (i * totalMonths));
+          triggerDate.setHours(hour, minute, 0, 0);
+          if (triggerDate <= now) continue;
+          const id = await scheduleDate(triggerDate);
+          allIds.push(id);
+        }
       }
-      const id = await Notifications.scheduleNotificationAsync({
-        content: notifContent,
-        trigger: { type: 'daily' as any, hour, minute },
-      });
-      return { primary: id, others: [] };
+    } catch (e) {
+      console.warn('Notificación no disponible en este entorno:', (e as Error).message);
     }
-
-    const allIds: string[] = [];
-    const now = new Date();
-
-    const scheduleDate = (triggerDate: Date): Promise<string> =>
-      Notifications.scheduleNotificationAsync({
-        content: notifContent,
-        trigger: { type: 'date' as any, date: triggerDate },
-      });
-
-    if (frequency === 'interval-days') {
-      const totalDays = intervalValue;
-      const notifCount = Math.min(totalDays, 60);
-      for (let i = 0; i < notifCount; i++) {
-        const triggerDate = new Date(now);
-        triggerDate.setDate(triggerDate.getDate() + (i * totalDays));
-        triggerDate.setHours(hour, minute, 0, 0);
-        if (triggerDate <= now) continue;
-        const id = await scheduleDate(triggerDate);
-        allIds.push(id);
-      }
-    } else if (frequency === 'interval-weeks') {
-      const totalWeeks = intervalValue;
-      const notifCount = Math.min(totalWeeks, 26);
-      for (let i = 0; i < notifCount; i++) {
-        const triggerDate = new Date(now);
-        triggerDate.setDate(triggerDate.getDate() + (i * totalWeeks * 7));
-        triggerDate.setHours(hour, minute, 0, 0);
-        if (triggerDate <= now) continue;
-        const id = await scheduleDate(triggerDate);
-        allIds.push(id);
-      }
-    } else if (frequency === 'interval-months') {
-      const totalMonths = intervalValue;
-      const notifCount = Math.min(totalMonths, 12);
-      for (let i = 0; i < notifCount; i++) {
-        const triggerDate = new Date(now);
-        triggerDate.setMonth(triggerDate.getMonth() + (i * totalMonths));
-        triggerDate.setHours(hour, minute, 0, 0);
-        if (triggerDate <= now) continue;
-        const id = await scheduleDate(triggerDate);
-        allIds.push(id);
-      }
-    }
-
-    return { primary: allIds[0] || null, others: allIds.slice(1) };
-  } catch (e) {
-    console.warn('Notificación no disponible en este entorno:', (e as Error).message);
-    return { primary: null, others: [] };
   }
+
+  return { primary: allIds[0] || null, others: allIds.slice(1) };
 }
 
 export async function cancelHabitNotification(notificationId: string | null | undefined): Promise<void> {

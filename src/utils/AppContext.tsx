@@ -149,7 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       category: habit.category || '',
       archived: false,
       reminderDays: habit.reminderDays || [],
-      reminderTime: habit.reminderTime || { hour: 9, minute: 0 },
+      reminderTimes: habit.reminderTimes?.length ? habit.reminderTimes : [{ hour: 9, minute: 0 }],
       reminderEnabled: habit.reminderEnabled !== false,
       reminderFrequency: habit.reminderFrequency || 'daily',
       reminderInterval: habit.reminderInterval || 1,

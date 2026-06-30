@@ -274,14 +274,14 @@ export default function HabitsScreen() {
     color: '#4F8EF7',
     category: '',
     reminderEnabled: true,
-    reminderTime: { hour: 9, minute: 0 },
+    reminderTimes: [{ hour: 9, minute: 0 }],
     reminderFrequency: 'daily',
     reminderInterval: 1,
     reminderDays: [],
   });
 
   const openAdd = () => {
-    setForm({ name: '', dose: '', emoji: '✅', color: '#4F8EF7', category: '', reminderEnabled: true, reminderTime: { hour: 9, minute: 0 }, reminderFrequency: 'daily', reminderInterval: 1, reminderDays: [] });
+    setForm({ name: '', dose: '', emoji: '✅', color: '#4F8EF7', category: '', reminderEnabled: true, reminderTimes: [{ hour: 9, minute: 0 }], reminderFrequency: 'daily', reminderInterval: 1, reminderDays: [] });
     setEditingHabit(null);
     setShowAddModal(true);
   };
@@ -294,7 +294,7 @@ export default function HabitsScreen() {
       color: habit.color,
       category: habit.category || '',
       reminderEnabled: habit.reminderEnabled,
-      reminderTime: { ...habit.reminderTime },
+      reminderTimes: habit.reminderTimes?.length ? habit.reminderTimes.map(t => ({ ...t })) : [{ hour: 9, minute: 0 }],
       reminderFrequency: habit.reminderFrequency || 'daily',
       reminderInterval: habit.reminderInterval || 1,
       reminderDays: habit.reminderDays || [],
@@ -424,7 +424,7 @@ export default function HabitsScreen() {
                     />
                     <Text style={[s.habitMetaText, !item.reminderEnabled && { color: c.textMuted }]}>
                       {item.reminderEnabled
-                        ? `${getFrequencyLabel(item)} · ${String(item.reminderTime.hour).padStart(2,'0')}:${String(item.reminderTime.minute).padStart(2,'0')}`
+                        ? `${getFrequencyLabel(item)} · ${(item.reminderTimes || []).map(t => `${String(t.hour).padStart(2,'0')}:${String(t.minute).padStart(2,'0')}`).join(', ')}`
                         : 'Sin recordatorio'
                       }
                     </Text>
@@ -670,13 +670,40 @@ export default function HabitsScreen() {
                 )}
 
                 <View style={s.formSection}>
-                  <Text style={s.formLabel}>HORA</Text>
-                  <TimePicker
-                    hour={form.reminderTime.hour}
-                    minute={form.reminderTime.minute}
-                    onChange={(h, m) => setForm(f => ({ ...f, reminderTime: { hour: h, minute: m } }))}
-                    c={c}
-                  />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={s.formLabel}>HORARIOS ({form.reminderTimes.length})</Text>
+                    {form.reminderTimes.length < 5 && (
+                      <TouchableOpacity
+                        onPress={() => setForm(f => ({ ...f, reminderTimes: [...f.reminderTimes, { hour: 9, minute: 0 }] }))}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      >
+                        <Ionicons name="add-circle-outline" size={16} color={c.primary} />
+                        <Text style={{ fontSize: fontSize.sm, color: c.primary }}>Añadir</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {form.reminderTimes.map((rt, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm }}>
+                      <TimePicker
+                        hour={rt.hour}
+                        minute={rt.minute}
+                        onChange={(h, m) => {
+                          const newTimes = [...form.reminderTimes];
+                          newTimes[idx] = { hour: h, minute: m };
+                          setForm(f => ({ ...f, reminderTimes: newTimes }));
+                        }}
+                        c={c}
+                      />
+                      {form.reminderTimes.length > 1 && (
+                        <TouchableOpacity
+                          onPress={() => setForm(f => ({ ...f, reminderTimes: f.reminderTimes.filter((_, i) => i !== idx) }))}
+                          style={{ padding: spacing.xs }}
+                        >
+                          <Ionicons name="close-circle" size={22} color={c.danger} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
                 </View>
               </>
             )}
