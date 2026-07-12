@@ -70,10 +70,10 @@ function MainWithErrorBoundary() {
   );
 }
 
-function LogWithErrorBoundary() {
+function LogWithErrorBoundary(props) {
   return (
     <ErrorBoundary>
-      <LogScreen />
+      <LogScreen {...props} />
     </ErrorBoundary>
   );
 }
