@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../utils/AppContext';
 import { colors, darkColors, spacing, radius, fontSize } from '../utils/theme';
 import { todayStr, dateStr } from '../utils/storage';
+import TimePicker from '../components/TimePicker';
 
 function dateLabel(ds) {
   const today = todayStr();
@@ -136,13 +137,11 @@ export default function LogScreen({ navigation }) {
         {/* Time */}
         <Text style={[s.sectionTitle, { marginTop: spacing.lg }]}>HORA</Text>
         <View style={[s.card, { paddingHorizontal: spacing.lg, paddingVertical: spacing.md }]}>
-          <TextInput
-            style={s.timeInput}
-            value={time}
-            onChangeText={setTime}
-            placeholder="09:00"
-            placeholderTextColor={c.textMuted}
-            keyboardType="numbers-and-punctuation"
+          <TimePicker
+            hour={parseInt(time.split(':')[0], 10)}
+            minute={parseInt(time.split(':')[1], 10)}
+            onChange={(h, m) => setTime(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)}
+            c={c}
           />
         </View>
 
