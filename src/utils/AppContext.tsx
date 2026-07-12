@@ -41,6 +41,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const resolvedScheme = themeMode === 'system' ? (systemScheme || 'dark') : themeMode as 'light' | 'dark';
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
+  const habitsRef = useRef(habits);
+  habitsRef.current = habits;
 
   const setThemeMode = useCallback((mode: 'system' | 'light' | 'dark') => {
     setThemeModeState(mode);
@@ -89,7 +91,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           };
           setEntries(prev => {
             const newEntries = [...prev, newEntry];
-            persist(habits, newEntries);
+            persist(habitsRef.current, newEntries);
             return newEntries;
           });
         }
@@ -100,7 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     });
     return () => sub.remove();
-  }, [habits, persist]);
+  }, [persist]);
 
   const markTaken = useCallback(async (habitId, date, time, note = '') => {
     const newEntry = {
