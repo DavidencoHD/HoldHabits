@@ -70,39 +70,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
     requestPermissions().then(setNotifGranted);
   }, [loading]);
 
+  const handleMarkDone = useCallback(async (habitId) => {
+    const date = todayStr();
+    const time = currentTimeStr();
+    const exists = entriesRef.current.some(e => e.date === date && e.habitId === habitId);
+    if (!exists) {
+      const newEntry = {
+        id: Date.now().toString(),
+        habitId,
+        date,
+        time,
+        note: '',
+        ts: Date.now(),
+      };
+      setEntries(prev => {
+        const newEntries = [...prev, newEntry];
+        persist(habitsRef.current, newEntries);
+        return newEntries;
+      });
+    }
+  }, [persist]);
+
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(async (response) => {
       const { actionIdentifier, notification } = response;
       const habitId = notification.request.content.data?.habitId;
       if (!habitId) return;
-
       if (actionIdentifier === ACTION_MARK_DONE) {
-        const date = todayStr();
-        const time = currentTimeStr();
-        const exists = entriesRef.current.some(e => e.date === date && e.habitId === habitId);
-        if (!exists) {
-          const newEntry = {
-            id: Date.now().toString(),
-            habitId,
-            date,
-            time,
-            note: '',
-            ts: Date.now(),
-          };
-          setEntries(prev => {
-            const newEntries = [...prev, newEntry];
-            persist(habitsRef.current, newEntries);
-            return newEntries;
-          });
-        }
-
+        await handleMarkDone(habitId);
         try {
           await Notifications.dismissNotificationAsync(notification.request.identifier);
         } catch (e) {}
       }
     });
     return () => sub.remove();
-  }, [persist]);
+  }, [handleMarkDone]);
+
+  useEffect(() => {
+    if (loading) return;
+    (async () => {
+      const response = await Notifications.getLastNotificationResponse();
+      if (response) {
+        const { actionIdentifier, notification } = response;
+        const habitId = notification.request.content.data?.habitId;
+        if (habitId && actionIdentifier === ACTION_MARK_DONE) {
+          await handleMarkDone(habitId);
+          try {
+            await Notifications.dismissNotificationAsync(notification.request.identifier);
+          } catch (e) {}
+        }
+      }
+    })();
+  }, [loading, handleMarkDone]);
 
   const markTaken = useCallback(async (habitId, date, time, note = '') => {
     const newEntry = {

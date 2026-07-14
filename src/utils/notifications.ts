@@ -27,7 +27,7 @@ export async function setupNotificationCategories(): Promise<void> {
     await Notifications.setNotificationCategoryAsync('habit-reminder', [
       {
         identifier: ACTION_MARK_DONE,
-        buttonTitle: '✓ Completada',
+        buttonTitle: '✓ Completar',
         options: {
           opensAppToForeground: false,
         },
