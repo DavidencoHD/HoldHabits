@@ -8,7 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../utils/AppContext';
 import { colors, darkColors, spacing, radius, fontSize } from '../utils/theme';
-import { todayStr, dateStr, calcStreak, getMonthStats } from '../utils/storage';
+import { dateStr, calcStreak, getMonthStats, habitsForDate } from '../utils/storage';
+import { useToday } from '../utils/useToday';
 
 const CATEGORIES = [
   { key: '', label: 'Sin categoría', icon: 'ellipse-outline' },
@@ -62,7 +63,7 @@ function AnimatedCheckmark({ size = 26, color }) {
   );
 }
 
-function HabitCard({ habit, taken, entry, onToggle, c, s }) {
+function HabitCard({ habit, taken, entry, onToggle, c, s, optional }) {
   const animScale = useRef(new Animated.Value(1)).current;
   const pressIn = () => Animated.spring(animScale, { toValue: 0.95, useNativeDriver: true }).start();
   const pressOut = () => Animated.spring(animScale, { toValue: 1, useNativeDriver: true, friction: 3 }).start();
@@ -105,7 +106,10 @@ function HabitCard({ habit, taken, entry, onToggle, c, s }) {
             </View>
           ) : (
             <Text style={s.reminderTime}>
-              <Ionicons name="time-outline" size={12} color={c.textMuted} /> {(habit.reminderTimes || []).map(t => `${String(t.hour).padStart(2,'0')}:${String(t.minute).padStart(2,'0')}`).join(', ')}
+              {optional
+                ? 'Opcional'
+                : <><Ionicons name="time-outline" size={12} color={c.textMuted} /> {(habit.reminderTimes || []).map(t => `${String(t.hour).padStart(2,'0')}:${String(t.minute).padStart(2,'0')}`).join(', ')}</>
+              }
             </Text>
           )}
         </View>
@@ -128,19 +132,28 @@ export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [confirmUnmark, setConfirmUnmark] = useState(null);
   const [focusMode, setFocusMode] = useState(false);
-  const today = todayStr();
+  const today = useToday();
   const [selectedDate, setSelectedDate] = useState(today);
+  const prevTodayRef = useRef(today);
 
   const visibleHabits = habits.filter(h => !h.archived);
 
-  const streak = calcStreak(visibleHabits, entries);
-  const totalHabits = visibleHabits.length;
-  const doneCount = visibleHabits.filter(h => isHabitTaken(h.id, selectedDate)).length;
+  const expectedToday = habitsForDate(visibleHabits, entries, today);
+  const expectedSelected = habitsForDate(visibleHabits, entries, selectedDate);
+  const expectedSelectedIds = new Set(expectedSelected.map(h => h.id));
+  const extraHabits = visibleHabits.filter(h =>
+    !expectedSelectedIds.has(h.id) &&
+    (!focusMode || !isHabitTaken(h.id, selectedDate))
+  );
+
+  const streak = expectedToday.length > 0 ? calcStreak(expectedToday, entries) : 0;
+  const totalHabits = expectedSelected.length;
+  const doneCount = expectedSelected.filter(h => isHabitTaken(h.id, selectedDate)).length;
   const pct = totalHabits > 0 ? Math.round(doneCount / totalHabits * 100) : 0;
 
   const filteredHabits = focusMode
-    ? visibleHabits.filter(h => !isHabitTaken(h.id, selectedDate))
-    : visibleHabits;
+    ? expectedSelected.filter(h => !isHabitTaken(h.id, selectedDate))
+    : expectedSelected;
 
   const grouped = {};
   filteredHabits.forEach(h => {
@@ -155,12 +168,13 @@ export default function HomeScreen({ navigation }) {
   });
 
   const days = useMemo(() => {
+    const base = new Date(today + 'T12:00:00');
     return Array.from({ length: 30 }, (_, i) => {
-      const d = new Date();
+      const d = new Date(base);
       d.setDate(d.getDate() - (29 - i));
       return dateStr(d);
     });
-  }, []);
+  }, [today]);
 
   const goToday = useCallback(() => {
     setSelectedDate(today);
@@ -170,6 +184,14 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     dayStripRef.current?.scrollToEnd({ animated: false });
   }, []);
+
+  useEffect(() => {
+    if (prevTodayRef.current === today) return;
+    const oldToday = prevTodayRef.current;
+    prevTodayRef.current = today;
+    setSelectedDate(prev => (prev === oldToday ? today : prev));
+    requestAnimationFrame(() => dayStripRef.current?.scrollToEnd({ animated: true }));
+  }, [today]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -206,7 +228,7 @@ export default function HomeScreen({ navigation }) {
     }
   }, [enableNotifications]);
 
-  const allDone = visibleHabits.length > 0 && visibleHabits.every(h => isHabitTaken(h.id, today));
+  const allDone = expectedToday.length > 0 && expectedToday.every(h => isHabitTaken(h.id, today));
   const isToday = selectedDate === today;
 
   const s = makeStyles(c);
@@ -223,7 +245,7 @@ export default function HomeScreen({ navigation }) {
               {isToday ? 'Tus hábitos' : shortDayLabel(selectedDate, today)}
             </Text>
             <Text style={s.headerDate}>
-              {isToday ? formatDate(new Date()) : formatDate(new Date(selectedDate + 'T12:00:00'))}
+              {formatDate(new Date(selectedDate + 'T12:00:00'))}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -264,9 +286,10 @@ export default function HomeScreen({ navigation }) {
           contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}
         >
           {days.map(ds => {
-            const allDone_ = visibleHabits.length > 0 && visibleHabits.every(h => isHabitTaken(h.id, ds));
-            const someDone_ = visibleHabits.some(h => isHabitTaken(h.id, ds));
-            const dotColor = allDone_ ? c.success : someDone_ ? c.warning : visibleHabits.length > 0 ? c.dangerLight : c.surface2;
+            const expForDay = habitsForDate(visibleHabits, entries, ds);
+            const allDone_ = expForDay.length > 0 && expForDay.every(h => isHabitTaken(h.id, ds));
+            const someDone_ = expForDay.some(h => isHabitTaken(h.id, ds));
+            const dotColor = allDone_ ? c.success : someDone_ ? c.warning : expForDay.length > 0 ? c.dangerLight : c.surface2;
             const isSel = ds === selectedDate;
             return (
               <TouchableOpacity
@@ -348,6 +371,31 @@ export default function HomeScreen({ navigation }) {
               </View>
             </View>
           ))
+        )}
+
+        {extraHabits.length > 0 && (
+          <View style={{ marginTop: spacing.sm }}>
+            <Text style={s.sectionTitle}>
+              <Ionicons name="add-circle-outline" size={12} color={c.textMuted} /> OTROS HÁBITOS
+            </Text>
+            <Text style={s.extraHint}>
+              No programados para {isToday ? 'hoy' : shortDayLabel(selectedDate, today)}. Puedes registrarlos igualmente.
+            </Text>
+            <View style={s.habitsList}>
+              {extraHabits.map(h => (
+                <HabitCard
+                  key={h.id}
+                  habit={h}
+                  taken={isHabitTaken(h.id, selectedDate)}
+                  entry={getEntryForHabit(h.id, selectedDate)}
+                  onToggle={() => handleToggle(h.id)}
+                  c={c}
+                  s={s}
+                  optional
+                />
+              ))}
+            </View>
+          </View>
         )}
 
         {focusMode && doneCount > 0 && doneCount < totalHabits && (
@@ -472,6 +520,10 @@ const makeStyles = (c) => StyleSheet.create({
   sectionTitle: {
     fontSize: fontSize.xs, fontWeight: '700', color: c.textMuted,
     letterSpacing: 0.8, paddingHorizontal: spacing.lg, marginBottom: spacing.sm,
+  },
+  extraHint: {
+    fontSize: fontSize.xs, color: c.textMuted,
+    paddingHorizontal: spacing.lg, marginBottom: spacing.sm,
   },
   dayChip: {
     width: 48, alignItems: 'center', gap: 2,

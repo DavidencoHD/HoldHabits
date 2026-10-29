@@ -43,6 +43,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   entriesRef.current = entries;
   const habitsRef = useRef(habits);
   habitsRef.current = habits;
+  const lastNotifIdRef = useRef<string | null>(null);
 
   const setThemeMode = useCallback((mode: 'system' | 'light' | 'dark') => {
     setThemeModeState(mode);
@@ -111,6 +112,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (async () => {
       const response = await Notifications.getLastNotificationResponse();
       if (response) {
+        const notifId = response.notification.request.identifier;
+        if (lastNotifIdRef.current === notifId) return;
+        lastNotifIdRef.current = notifId;
         const { actionIdentifier, notification } = response;
         const habitId = notification.request.content.data?.habitId;
         if (habitId && actionIdentifier === ACTION_MARK_DONE) {
@@ -121,7 +125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
     })();
-  }, [loading, handleMarkDone]);
+  }, [loading]);
 
   const markTaken = useCallback(async (habitId, date, time, note = '') => {
     const newEntry = {
@@ -169,6 +173,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       color: habit.color || '#4F8EF7',
       category: habit.category || '',
       archived: false,
+      createdAt: todayStr(),
       reminderDays: habit.reminderDays || [],
       reminderTimes: habit.reminderTimes?.length ? habit.reminderTimes : [{ hour: 9, minute: 0 }],
       reminderEnabled: habit.reminderEnabled !== false,

@@ -8,7 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../utils/AppContext';
 import { colors, darkColors, spacing, radius, fontSize } from '../utils/theme';
-import { dateStr, calcStreak, calcBestStreak } from '../utils/storage';
+import { dateStr, calcStreak, calcBestStreak, isHabitExpectedOnDate, habitsForDate } from '../utils/storage';
+import { useToday } from '../utils/useToday';
 
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -95,7 +96,8 @@ export default function StatsScreen() {
   const { habits: allHabits, entries, handleExport, handleImport, resolvedScheme } = useApp();
   const c = resolvedScheme === 'dark' ? darkColors : colors;
   const habits = allHabits.filter(h => !h.archived);
-  const today = new Date();
+  const todayKey = useToday();
+  const today = useMemo(() => new Date(todayKey + 'T12:00:00'), [todayKey]);
 
   const [selectedHabit, setSelectedHabit] = useState(null);
   const [showBackup, setShowBackup] = useState(false);
@@ -110,8 +112,9 @@ export default function StatsScreen() {
       const d = new Date(today);
       d.setDate(d.getDate() - (6 - i));
       const ds = dateStr(d);
-      const done = habits.filter(h => entries.some(e => e.date === ds && e.habitId === h.id)).length;
-      const pct = habits.length > 0 ? Math.round(done / habits.length * 100) : 0;
+      const expected = habitsForDate(habits, entries, ds);
+      const done = expected.filter(h => entries.some(e => e.date === ds && e.habitId === h.id)).length;
+      const pct = expected.length > 0 ? Math.round(done / expected.length * 100) : 0;
       return { label: DAYS[d.getDay()], pct, date: ds };
     });
   }, [habits, entries, today]);
@@ -127,6 +130,7 @@ export default function StatsScreen() {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
         const ds = dateStr(d);
+        if (!isHabitExpectedOnDate(h, ds)) continue;
         if (uniqueDates.includes(ds)) cur++;
         else if (i > 0) break;
       }
@@ -135,14 +139,21 @@ export default function StatsScreen() {
         d.setDate(d.getDate() - i);
         return dateStr(d);
       });
-      const done30 = last30.filter(ds => uniqueDates.includes(ds)).length;
-      const last7 = last30.slice(0, 7);
-      const done7 = last7.filter(ds => uniqueDates.includes(ds)).length;
-      return { ...h, currentStreak: cur, rate30: Math.round(done30 / 30 * 100), rate7: Math.round(done7 / 7 * 100) };
+      const expected30 = last30.filter(ds => isHabitExpectedOnDate(h, ds));
+      const done30 = expected30.filter(ds => uniqueDates.includes(ds)).length;
+      const expected7 = expected30.slice(0, 7).filter(ds => isHabitExpectedOnDate(h, ds));
+      const done7 = expected7.filter(ds => uniqueDates.includes(ds)).length;
+      return {
+        ...h,
+        currentStreak: cur,
+        rate30: expected30.length > 0 ? Math.round(done30 / expected30.length * 100) : 0,
+        rate7: expected7.length > 0 ? Math.round(done7 / expected7.length * 100) : 0,
+      };
     }).sort((a, b) => b.currentStreak - a.currentStreak);
   }, [habits, entries, today]);
 
   function getMonthData(habitId, year, month) {
+    const targetHabit = habits.find(h => h.id === habitId);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDow = new Date(year, month, 1).getDay();
     const startOffset = firstDow === 0 ? 6 : firstDow - 1;
@@ -150,31 +161,31 @@ export default function StatsScreen() {
     for (let i = 0; i < startOffset; i++) {
       days.push(null);
     }
-    const today = new Date();
     let doneCount = 0, totalCount = 0;
     for (let d = 1; d <= daysInMonth; d++) {
       const dd = new Date(year, month, d);
       const ds = dateStr(dd);
       const done = entries.some(e => e.date === ds && e.habitId === habitId);
       const isFuture = dd > today;
-      if (!isFuture) { totalCount++; if (done) doneCount++; }
-      days.push({ day: d, done, isFuture });
+      const expected = targetHabit ? isHabitExpectedOnDate(targetHabit, ds) : true;
+      if (!isFuture && expected) { totalCount++; if (done) doneCount++; }
+      days.push({ day: d, done, isFuture, expected });
     }
     return { month, year, days, doneCount, totalCount };
   }
 
   const habitMonthData = useMemo(() => {
     if (!selectedHabit) return null;
-    const now = new Date();
+    const now = today;
     let m = now.getMonth() - detailMonthOffset;
     let y = now.getFullYear();
     while (m < 0) { m += 12; y--; }
     return getMonthData(selectedHabit.id, y, m);
-  }, [selectedHabit, entries, detailMonthOffset]);
+  }, [selectedHabit, entries, detailMonthOffset, today]);
 
   const yearMonths = useMemo(() => {
     if (!selectedHabit) return [];
-    const now = new Date();
+    const now = today;
     return Array.from({ length: 12 }, (_, i) => {
       let m = now.getMonth() - i;
       let y = now.getFullYear();
@@ -183,7 +194,7 @@ export default function StatsScreen() {
       const pct = data.totalCount > 0 ? Math.round(data.doneCount / data.totalCount * 100) : -1;
       return { label: MONTHS[data.month].slice(0, 3), pct, year: data.year };
     }).reverse();
-  }, [selectedHabit, entries]);
+  }, [selectedHabit, entries, today]);
 
   const s = makeStyles(c);
 
@@ -421,8 +432,8 @@ export default function StatsScreen() {
                           {d ? (
                             <View style={{
                               width: 28, height: 28, borderRadius: 14,
-                              backgroundColor: d.done ? c.successLight : (d.isFuture ? 'transparent' : c.dangerLight),
-                              borderWidth: d.isFuture ? 1 : 0,
+                              backgroundColor: d.done ? c.successLight : (d.isFuture || !d.expected ? 'transparent' : c.dangerLight),
+                              borderWidth: d.isFuture || !d.expected ? 1 : 0,
                               borderColor: c.border,
                               alignItems: 'center', justifyContent: 'center',
                             }}>

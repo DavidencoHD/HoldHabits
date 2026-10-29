@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, TextInput, Alert,
@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../utils/AppContext';
 import { colors, darkColors, spacing, radius, fontSize } from '../utils/theme';
-import { dateStr, calcStreak, calcBestStreak } from '../utils/storage';
+import { dateStr, calcStreak, calcBestStreak, isHabitExpectedOnDate } from '../utils/storage';
+import { useToday } from '../utils/useToday';
 
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -15,7 +16,8 @@ const DAY_LABELS = ['L','M','X','J','V','S','D'];
 
 function getDayEntries(entries, habits, ds) {
   const dayEntries = entries.filter(e => e.date === ds);
-  return habits.map(h => ({
+  const loggedIds = new Set(dayEntries.map(e => e.habitId));
+  return habits.filter(h => isHabitExpectedOnDate(h, ds) || loggedIds.has(h.id)).map(h => ({
     habit: h,
     done: dayEntries.some(e => e.habitId === h.id),
     entry: dayEntries.find(e => e.habitId === h.id),
@@ -28,12 +30,29 @@ export default function CalendarScreen() {
   const c = resolvedScheme === 'dark' ? darkColors : colors;
   const habits = allHabits.filter(h => !h.archived);
 
-  const today = useMemo(() => new Date(), []);
+  const todayKey = useToday();
+  const today = useMemo(() => new Date(todayKey + 'T12:00:00'), [todayKey]);
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(null);
   const [editEntry, setEditEntry] = useState(null);
   const [editNote, setEditNote] = useState('');
   const [editTime, setEditTime] = useState('');
+  const prevTodayRef = useRef(todayKey);
+
+  useEffect(() => {
+    if (prevTodayRef.current === todayKey) return;
+    const oldToday = prevTodayRef.current;
+    prevTodayRef.current = todayKey;
+    setSelectedDate(prev => (prev === oldToday ? todayKey : prev));
+    setViewDate(prev => {
+      const old = new Date(oldToday + 'T12:00:00');
+      if (prev.getFullYear() === old.getFullYear() && prev.getMonth() === old.getMonth()) {
+        const now = new Date(todayKey + 'T12:00:00');
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+      return prev;
+    });
+  }, [todayKey]);
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();

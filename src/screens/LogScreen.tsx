@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Alert,
@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../utils/AppContext';
 import { colors, darkColors, spacing, radius, fontSize } from '../utils/theme';
 import { todayStr, dateStr } from '../utils/storage';
+import { useToday } from '../utils/useToday';
 import TimePicker from '../components/TimePicker';
 
 function dateLabel(ds) {
@@ -29,15 +30,23 @@ export default function LogScreen({ navigation }) {
   const c = resolvedScheme === 'dark' ? darkColors : colors;
   const habits = allHabits.filter(h => !h.archived);
 
-  const today = todayStr();
+  const today = useToday();
   const [selectedDate, setSelectedDate] = useState(today);
+  const prevTodayRef = useRef(today);
   const [selectedHabit, setSelectedHabit] = useState(habits[0]?.id || '');
   const [time, setTime] = useState('09:00');
   const [note, setNote] = useState('');
 
+  useEffect(() => {
+    if (prevTodayRef.current === today) return;
+    const oldToday = prevTodayRef.current;
+    prevTodayRef.current = today;
+    setSelectedDate(prev => (prev === oldToday ? today : prev));
+  }, [today]);
+
   // Generate last 30 days
   const days = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date();
+    const d = new Date(today + 'T12:00:00');
     d.setDate(d.getDate() - i);
     return dateStr(d);
   });

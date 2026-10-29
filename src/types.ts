@@ -11,6 +11,7 @@ export interface Habit {
   color: string;
   category: string;
   archived: boolean;
+  createdAt: string;
   reminderDays: number[];
   reminderTimes: ReminderTime[];
   reminderEnabled: boolean;

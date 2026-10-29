@@ -29,7 +29,7 @@ export async function setupNotificationCategories(): Promise<void> {
         identifier: ACTION_MARK_DONE,
         buttonTitle: '✓ Completar',
         options: {
-          opensAppToForeground: false,
+          opensAppToForeground: true,
         },
       },
     ]);

@@ -8,10 +8,24 @@ const OLD_ONBOARDING_KEY = 'trackify_onboarding_done';
 const THEME_KEY = 'holdhabits_theme';
 const SCHEMA_VERSION = 2;
 
-function migrateHabits(habits: Habit[]): Habit[] {
+function deriveCreatedAt(habit: Habit, entries: Entry[]): string {
+  const fromId = Number(habit.id);
+  if (habit.id && /^\d{12,}$/.test(habit.id) && Number.isFinite(fromId)) {
+    return dateStr(new Date(fromId));
+  }
+  const own = entries
+    .filter(e => e.habitId === habit.id && e.date)
+    .map(e => e.date)
+    .sort();
+  if (own.length > 0) return own[0];
+  return '';
+}
+
+function migrateHabits(habits: Habit[], entries: Entry[]): Habit[] {
   return habits.map(h => ({
     ...h,
     archived: h.archived === true,
+    createdAt: typeof h.createdAt === 'string' ? h.createdAt : deriveCreatedAt(h, entries),
     reminderDays: Array.isArray(h.reminderDays) ? h.reminderDays : [],
     category: h.category || '',
     color: h.color || '#4F8EF7',
@@ -38,9 +52,10 @@ export async function loadData(): Promise<{ habits: Habit[]; entries: Entry[]; s
     }
     if (raw) {
       const parsed = JSON.parse(raw);
+      const entries: Entry[] = parsed.entries || [];
       return {
-        habits: migrateHabits(parsed.habits || []),
-        entries: parsed.entries || [],
+        habits: migrateHabits(parsed.habits || [], entries),
+        entries,
         schemaVersion: SCHEMA_VERSION,
       };
     }
@@ -128,6 +143,39 @@ export function currentTimeStr(): string {
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 }
 
+export function isHabitScheduledOnDate(habit: Habit, dateStr: string): boolean {
+  if (habit.reminderFrequency === 'daily') {
+    const days = habit.reminderDays || [];
+    if (days.length === 0) return true;
+    const d = new Date(dateStr + 'T12:00:00');
+    const dow = d.getDay();
+    const normalized = dow === 0 ? 6 : dow - 1;
+    return days.includes(normalized);
+  }
+  return true;
+}
+
+/**
+ * Un hábito solo cuenta como esperado a partir del día en que se creó.
+ * Los días anteriores no deben mostrarse como incumplidos.
+ */
+export function isHabitExpectedOnDate(habit: Habit, dateStr: string): boolean {
+  if (habit.createdAt && dateStr < habit.createdAt) return false;
+  return isHabitScheduledOnDate(habit, dateStr);
+}
+
+/**
+ * Hábitos que cuentan para un día: los esperados según su programación y fecha
+ * de creación, más los que tengan un registro manual en ese día (permite marcar
+ * días anteriores a la creación del hábito).
+ */
+export function habitsForDate(habits: Habit[], entries: Entry[], dateStr: string): Habit[] {
+  return habits.filter(h =>
+    isHabitExpectedOnDate(h, dateStr) ||
+    entries.some(e => e.date === dateStr && e.habitId === h.id)
+  );
+}
+
 export function calcStreak(habits: Habit[], entries: Entry[]): number {
   if (!habits.length) return 0;
   let streak = 0;
@@ -136,7 +184,9 @@ export function calcStreak(habits: Habit[], entries: Entry[]): number {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const ds = dateStr(d);
-    const allTaken = habits.every(h =>
+    const expected = habits.filter(h => isHabitExpectedOnDate(h, ds));
+    if (expected.length === 0) continue;
+    const allTaken = expected.every(h =>
       entries.some(e => e.date === ds && e.habitId === h.id)
     );
     if (allTaken) {
@@ -154,7 +204,9 @@ export function calcBestStreak(habits: Habit[], entries: Entry[]): number {
   let best = 0, cur = 0;
   let prev: string | null = null;
   for (const ds of allDates) {
-    const allTaken = habits.every(h =>
+    const expected = habits.filter(h => isHabitExpectedOnDate(h, ds));
+    if (expected.length === 0) continue;
+    const allTaken = expected.every(h =>
       entries.some(e => e.date === ds && e.habitId === h.id)
     );
     if (allTaken) {
@@ -181,13 +233,12 @@ export function getMonthStats(habits: Habit[], entries: Entry[], year: number, m
     const dd = new Date(year, month, d);
     if (dd > today) break;
     const ds = dateStr(dd);
-    const allTaken =
-      habits.length > 0 &&
-      habits.every(h => entries.some(e => e.date === ds && e.habitId === h.id));
-    const isToday = ds === dateStr(today);
+    const expected = habits.filter(h => isHabitExpectedOnDate(h, ds));
+    if (expected.length === 0) continue;
+    const allTaken = expected.every(h => entries.some(e => e.date === ds && e.habitId === h.id));
     if (allTaken) {
       taken++;
-    } else if (!isToday && habits.length > 0) {
+    } else {
       missed++;
     }
   }
