@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,7 +7,7 @@ import { useColorScheme, Platform, StatusBar } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 
-import { AppProvider } from './src/utils/AppContext';
+import { AppProvider, useApp } from './src/utils/AppContext';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import HomeScreen from './src/screens/HomeScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
@@ -21,8 +21,8 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function HomeTabs() {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
+  const { resolvedScheme } = useApp();
+  const isDark = resolvedScheme === 'dark';
   const insets = useSafeAreaInsets();
 
   return (
@@ -78,6 +78,34 @@ function LogWithErrorBoundary(props) {
   );
 }
 
+function ThemedStatusBar() {
+  const { resolvedScheme } = useApp();
+  const isDark = resolvedScheme === 'dark';
+  return (
+    <StatusBar
+      barStyle={isDark ? 'light-content' : 'dark-content'}
+      backgroundColor={isDark ? '#000000' : '#F8F9FA'}
+      translucent={false}
+    />
+  );
+}
+
+function AppNavigation() {
+  const { resolvedScheme } = useApp();
+  return (
+    <NavigationContainer theme={resolvedScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Main" component={MainWithErrorBoundary} />
+        <Stack.Screen
+          name="Log"
+          component={LogWithErrorBoundary}
+          options={{ presentation: 'modal' }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
 export default function App() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
@@ -115,22 +143,9 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar
-          barStyle={isDark ? 'light-content' : 'dark-content'}
-          backgroundColor={isDark ? '#000000' : '#F8F9FA'}
-          translucent={false}
-        />
         <AppProvider>
-          <NavigationContainer>
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="Main" component={MainWithErrorBoundary} />
-              <Stack.Screen
-                name="Log"
-                component={LogWithErrorBoundary}
-                options={{ presentation: 'modal' }}
-              />
-            </Stack.Navigator>
-          </NavigationContainer>
+          <ThemedStatusBar />
+          <AppNavigation />
         </AppProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

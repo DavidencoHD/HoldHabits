@@ -6,7 +6,16 @@ const OLD_STORAGE_KEY = 'pilltracker_v1';
 const ONBOARDING_KEY = 'holdhabits_onboarding_done';
 const OLD_ONBOARDING_KEY = 'trackify_onboarding_done';
 const THEME_KEY = 'holdhabits_theme';
+const BACKUP_KEY = 'holdhabits_backup';
 const SCHEMA_VERSION = 2;
+
+/**
+ * Identificador único. Los ids basados solo en `Date.now()` colisionan cuando
+ * se crean dos registros en el mismo milisegundo.
+ */
+export function createId(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
 
 function deriveCreatedAt(habit: Habit, entries: Entry[]): string {
   const fromId = Number(habit.id);
@@ -65,12 +74,22 @@ export async function loadData(): Promise<{ habits: Habit[]; entries: Entry[]; s
   return { habits: [], entries: [], schemaVersion: SCHEMA_VERSION };
 }
 
-export async function saveData(habits: Habit[], entries: Entry[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ habits, entries }));
-  } catch (e) {
-    console.warn('Error saving data:', e);
-  }
+/**
+ * Cola de escritura: AsyncStorage no garantiza el orden de dos setItem
+ * concurrentes, así que se serializan para que el último cambio gane siempre.
+ */
+let writeQueue: Promise<void> = Promise.resolve();
+
+export function saveData(habits: Habit[], entries: Entry[]): Promise<void> {
+  const payload = JSON.stringify({ habits, entries, schemaVersion: SCHEMA_VERSION });
+  writeQueue = writeQueue.then(async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, payload);
+    } catch (e) {
+      console.warn('Error saving data:', e);
+    }
+  });
+  return writeQueue;
 }
 
 export async function isOnboardingDone(): Promise<boolean> {
@@ -115,11 +134,30 @@ export async function exportAllData(): Promise<string> {
 }
 
 export async function importAllData(jsonStr: string): Promise<{ habits: Habit[]; entries: Entry[] }> {
+  let data: any;
   try {
-    const data = JSON.parse(jsonStr);
-    if (!data.habits || !data.entries) throw new Error('Formato inválido');
-    await AsyncStorage.setItem(STORAGE_KEY, jsonStr);
-    return data;
+    data = JSON.parse(jsonStr);
+  } catch (e) {
+    throw new Error('El archivo no es un JSON válido');
+  }
+  if (!Array.isArray(data.habits) || !Array.isArray(data.entries)) {
+    throw new Error('El archivo no tiene el formato esperado (habits / entries)');
+  }
+  const habits = data.habits.filter((h: any) => h && typeof h.id === 'string');
+  const entries = data.entries.filter(
+    (e: any) => e && typeof e.habitId === 'string' && typeof e.date === 'string'
+  );
+  if (habits.length === 0) throw new Error('El archivo no contiene hábitos');
+
+  try {
+    // Copia de seguridad de los datos actuales antes de sustituirlos.
+    const current = await AsyncStorage.getItem(STORAGE_KEY);
+    if (current) await AsyncStorage.setItem(BACKUP_KEY, current);
+    await AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ habits, entries, schemaVersion: SCHEMA_VERSION })
+    );
+    return { habits, entries };
   } catch (e) {
     throw new Error('Error al importar: ' + (e as Error).message);
   }

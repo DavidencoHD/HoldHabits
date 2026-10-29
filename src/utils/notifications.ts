@@ -63,6 +63,72 @@ export async function requestPermissions(): Promise<boolean> {
   return true;
 }
 
+/** JS: 0=domingo … 6=sábado → expo-notifications: 1=domingo … 7=sábado */
+function toExpoWeekday(dow: number): number {
+  return dow + 1;
+}
+
+function addMonthsClamped(date: Date, months: number): Date {
+  const year = date.getFullYear();
+  const month = date.getMonth() + months;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(date.getDate(), lastDay));
+}
+
+/**
+ * Próximas fechas de un recordatorio que se repite cada X días/semanas/meses.
+ * Se calculan desde `createdAt` para que no se desplacen con el tiempo.
+ */
+export function nextIntervalDates(
+  frequency: string,
+  interval: number,
+  hour: number,
+  minute: number,
+  anchorStr: string | undefined,
+  count: number,
+  now: Date = new Date()
+): Date[] {
+  const step = Math.max(1, interval || 1);
+  const anchor = anchorStr ? new Date(`${anchorStr}T12:00:00`) : new Date(now);
+  const dates: Date[] = [];
+
+  if (frequency === 'interval-months') {
+    for (let k = 0; k < 600 && dates.length < count; k++) {
+      const d = addMonthsClamped(anchor, k * step);
+      d.setHours(hour, minute, 0, 0);
+      if (d > now) dates.push(d);
+    }
+    return dates;
+  }
+
+  const stepDays = frequency === 'interval-weeks' ? step * 7 : step;
+
+  const build = (k: number) => {
+    const d = new Date(anchor);
+    d.setDate(anchor.getDate() + k * stepDays);
+    d.setHours(hour, minute, 0, 0);
+    return d;
+  };
+
+  let k = 0;
+  while (k < 5000 && build(k) <= now) k++;
+  for (; k < 5000 && dates.length < count; k++) dates.push(build(k));
+
+  return dates;
+}
+
+/** Un recordatorio con fechas finitas debe reprogramarse al abrir la app. */
+export function needsScheduleRefresh(habit: Habit): boolean {
+  const frequency = habit.reminderFrequency || 'daily';
+  const interval = habit.reminderInterval || 1;
+  if (frequency === 'daily') return false;
+  if (frequency === 'interval-days' && interval === 1) return false;
+  if (frequency === 'interval-weeks' && interval === 1) return false;
+  return true;
+}
+
+const FINITE_SCHEDULE_COUNT = 12;
+
 export async function scheduleHabitNotification(habit: Habit): Promise<{ primary: string | null; others: string[] }> {
   if (habit.notificationIds && habit.notificationIds.length > 0) {
     for (const nid of habit.notificationIds) {
@@ -99,24 +165,31 @@ export async function scheduleHabitNotification(habit: Habit): Promise<{ primary
     try {
       if (frequency === 'daily') {
         const specificDays: number[] = habit.reminderDays || [];
-        if (specificDays.length > 0) {
-          const now = new Date();
-          for (let i = 0; i < 60; i++) {
-            const triggerDate = new Date(now);
-            triggerDate.setDate(triggerDate.getDate() + i);
-            const dow = triggerDate.getDay();
-            const normalizedDow = dow === 0 ? 6 : dow - 1;
-            if (!specificDays.includes(normalizedDow)) continue;
-            triggerDate.setHours(hour, minute, 0, 0);
-            if (triggerDate <= now) continue;
-            const id = await Notifications.scheduleNotificationAsync({
-              content: notifContent,
-              trigger: { type: 'date' as any, date: triggerDate },
-            });
-            allIds.push(id);
-          }
+        if (specificDays.length === 0) {
+          // Un único trigger repetido: no caduca y ocupa una sola alarma.
+          const id = await Notifications.scheduleNotificationAsync({
+            content: notifContent,
+            trigger: { type: 'daily' as any, hour, minute },
+          });
+          allIds.push(id);
           continue;
         }
+
+        // Días concretos: un trigger semanal por día (máximo 7 alarmas).
+        for (const day of specificDays) {
+          // reminderDays: 0=lunes … 6=domingo → día de la semana de JS → expo
+          const jsDow = (day + 1) % 7;
+          const id = await Notifications.scheduleNotificationAsync({
+            content: notifContent,
+            trigger: { type: 'weekly' as any, weekday: toExpoWeekday(jsDow), hour, minute },
+          });
+          allIds.push(id);
+        }
+        continue;
+      }
+
+      // Cada X días/semanas con intervalo 1 equivale a un trigger repetido.
+      if (frequency === 'interval-days' && intervalValue === 1) {
         const id = await Notifications.scheduleNotificationAsync({
           content: notifContent,
           trigger: { type: 'daily' as any, hour, minute },
@@ -125,47 +198,32 @@ export async function scheduleHabitNotification(habit: Habit): Promise<{ primary
         continue;
       }
 
-      const now = new Date();
+      if (frequency === 'interval-weeks' && intervalValue === 1) {
+        const anchor = habit.createdAt ? new Date(`${habit.createdAt}T12:00:00`) : new Date();
+        const id = await Notifications.scheduleNotificationAsync({
+          content: notifContent,
+          trigger: { type: 'weekly' as any, weekday: toExpoWeekday(anchor.getDay()), hour, minute },
+        });
+        allIds.push(id);
+        continue;
+      }
 
-      const scheduleDate = (triggerDate: Date): Promise<string> =>
-        Notifications.scheduleNotificationAsync({
+      // Frecuencias que no tienen trigger nativo: se programan las próximas
+      // ocurrencias y se renuevan cada vez que se abre la app.
+      const dates = nextIntervalDates(
+        frequency,
+        intervalValue,
+        hour,
+        minute,
+        habit.createdAt,
+        FINITE_SCHEDULE_COUNT
+      );
+      for (const triggerDate of dates) {
+        const id = await Notifications.scheduleNotificationAsync({
           content: notifContent,
           trigger: { type: 'date' as any, date: triggerDate },
         });
-
-      if (frequency === 'interval-days') {
-        const totalDays = intervalValue;
-        const notifCount = Math.min(totalDays, 60);
-        for (let i = 0; i < notifCount; i++) {
-          const triggerDate = new Date(now);
-          triggerDate.setDate(triggerDate.getDate() + (i * totalDays));
-          triggerDate.setHours(hour, minute, 0, 0);
-          if (triggerDate <= now) continue;
-          const id = await scheduleDate(triggerDate);
-          allIds.push(id);
-        }
-      } else if (frequency === 'interval-weeks') {
-        const totalWeeks = intervalValue;
-        const notifCount = Math.min(totalWeeks, 26);
-        for (let i = 0; i < notifCount; i++) {
-          const triggerDate = new Date(now);
-          triggerDate.setDate(triggerDate.getDate() + (i * totalWeeks * 7));
-          triggerDate.setHours(hour, minute, 0, 0);
-          if (triggerDate <= now) continue;
-          const id = await scheduleDate(triggerDate);
-          allIds.push(id);
-        }
-      } else if (frequency === 'interval-months') {
-        const totalMonths = intervalValue;
-        const notifCount = Math.min(totalMonths, 12);
-        for (let i = 0; i < notifCount; i++) {
-          const triggerDate = new Date(now);
-          triggerDate.setMonth(triggerDate.getMonth() + (i * totalMonths));
-          triggerDate.setHours(hour, minute, 0, 0);
-          if (triggerDate <= now) continue;
-          const id = await scheduleDate(triggerDate);
-          allIds.push(id);
-        }
+        allIds.push(id);
       }
     } catch (e) {
       console.warn('Notificación no disponible en este entorno:', (e as Error).message);

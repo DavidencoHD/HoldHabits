@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import * as Notifications from 'expo-notifications';
 import { useColorScheme } from 'react-native';
-import { loadData, saveData, todayStr, currentTimeStr, exportAllData, importAllData, loadThemePreference, saveThemePreference } from '../utils/storage';
-import { scheduleHabitNotification, cancelHabitNotification, requestPermissions, setupNotificationCategories, ACTION_MARK_DONE } from '../utils/notifications';
+import { loadData, saveData, todayStr, currentTimeStr, exportAllData, importAllData, loadThemePreference, saveThemePreference, createId } from '../utils/storage';
+import { scheduleHabitNotification, cancelHabitNotification, requestPermissions, setupNotificationCategories, ACTION_MARK_DONE, needsScheduleRefresh } from '../utils/notifications';
 import { Habit, Entry, HabitFormData } from '../types';
 
 export interface AppContextValue {
@@ -71,13 +71,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     requestPermissions().then(setNotifGranted);
   }, [loading]);
 
+  // Algunas frecuencias (cada X días/semanas/meses) se programan con fechas
+  // finitas: se renuevan cada vez que se abre la app para que no caduquen.
+  useEffect(() => {
+    if (loading || !notifGranted) return;
+    let cancelled = false;
+    (async () => {
+      const pending = habitsRef.current.filter(h => h.reminderEnabled && needsScheduleRefresh(h));
+      if (pending.length === 0) return;
+      const refreshed: Habit[] = [];
+      for (const habit of pending) {
+        try {
+          const result = await scheduleHabitNotification(habit);
+          refreshed.push({ ...habit, notificationId: result.primary, notificationIds: result.others });
+        } catch (e) {
+          console.warn('No se pudo renovar el recordatorio:', e.message);
+        }
+      }
+      if (cancelled || refreshed.length === 0) return;
+      setHabits(prev => {
+        const byId = new Map(refreshed.map(h => [h.id, h]));
+        const next = prev.map(h => byId.get(h.id) || h);
+        persist(next, entriesRef.current);
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [loading, notifGranted, persist]);
+
   const handleMarkDone = useCallback(async (habitId) => {
     const date = todayStr();
     const time = currentTimeStr();
     const exists = entriesRef.current.some(e => e.date === date && e.habitId === habitId);
     if (!exists) {
       const newEntry = {
-        id: Date.now().toString(),
+        id: createId(),
         habitId,
         date,
         time,
@@ -128,21 +156,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [loading]);
 
   const markTaken = useCallback(async (habitId, date, time, note = '') => {
+    const targetDate = date || todayStr();
+    const existing = entriesRef.current.find(
+      e => e.habitId === habitId && e.date === targetDate
+    );
+    if (existing) return existing;
+
     const newEntry = {
-      id: Date.now().toString(),
+      id: createId(),
       habitId,
-      date: date || todayStr(),
+      date: targetDate,
       time: time || currentTimeStr(),
       note,
       ts: Date.now(),
     };
     setEntries(prev => {
       const newEntries = [...prev, newEntry] as Entry[];
-      persist(habits, newEntries);
+      persist(habitsRef.current, newEntries);
       return newEntries;
     });
     return newEntry;
-  }, [habits, persist]);
+  }, [persist]);
 
   const unmarkTaken = useCallback(async (habitId, date) => {
     setEntries(prev => {
@@ -166,7 +200,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addHabit = useCallback(async (habit) => {
     const newHabit = {
-      id: Date.now().toString(),
+      id: createId(),
       name: habit.name,
       dose: habit.dose || '',
       emoji: habit.emoji || '✅',
